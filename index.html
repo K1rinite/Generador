@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador SQL PDV - Fybeca/Sanasana</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            /* Asegúrate de que la imagen se llame fondo.png y esté en la misma carpeta */
+            background-image: url('fondo.png');
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-attachment: fixed;
+            background-size: cover; /* Cambia 'cover' por 'contain' si prefieres que el logo no se recorte */
+            
+            /* Un pequeño filtro oscuro/claro opcional para que el panel resalte más */
+            background-color: #f1f5f9;
+            background-blend-mode: multiply; 
+        }
+    </style>
+</head>
+<body class="p-6">
+    <div class="max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-lg border border-slate-200 relative z-10">
+        <h1 class="text-2xl font-bold text-slate-800 mb-2">Generador de insert para aperturas de PDV en el ambiente productivo de GPF</h1>
+        <p class="text-slate-500 mb-6 text-sm">Agrega varios PDVs a la cola y descarga un único archivo en formato .TXT al finalizar.</p>
+        
+        <div class="grid grid-cols-2 gap-6 mb-6">
+            <div class="col-span-2 md:col-span-1">
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Cadena</label>
+                <select id="cadena" class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-green-500 outline-none">
+                    <option value="fybeca">Fybeca</option>
+                    <option value="sanasana">SanaSana</option>
+                </select>
+            </div>
+            <div class="col-span-2 md:col-span-1">
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Localid del PDV</label>
+                <input type="text" id="pdvId" placeholder="ej: 72897" class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div class="col-span-1">
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Nombre (Farmacia)</label>
+                <input type="text" id="nombreFarma" placeholder="ej: FYBECA BATAN" class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div class="col-span-1">
+                <label class="block text-sm font-semibold text-slate-700 mb-1">Dirección Completa</label>
+                <input type="text" id="direccion" placeholder="ej: AV. 6 DE DICIEMBRE..." class="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            
+            <div class="col-span-1 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                <label class="block text-sm font-bold text-blue-800 mb-2">Configuración de Red</label>
+                <label class="block text-xs text-blue-600 mb-1">IP de un POS</label>
+                <input type="text" id="ipBase" placeholder="ej: 10.8.74.141" class="w-full p-2 border border-blue-200 rounded mb-3">
+                
+                <label class="block text-sm font-semibold text-blue-800 mb-1">Tipo de Servidor</label>
+                <select id="tipoServidor" class="w-full p-2 border border-blue-200 rounded" onchange="toggleOCI()">
+                    <option value="fisico">Físico</option>
+                    <option value="oci">OCI (Oracle Cloud Infrastructure)</option>
+                </select>
+
+                <div id="divIpOCI" class="hidden mt-3">
+                    <label class="block text-xs font-bold text-orange-600 mb-1">IP del local (Nodo 99)</label>
+                    <input type="text" id="ipNodo99" placeholder="ej: 10.106.9.21" class="w-full p-2 border border-orange-300 rounded">
+                </div>
+            </div>
+
+            <div class="col-span-1 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <label class="block text-sm font-bold text-slate-800 mb-2">Configuración de Nodos</label>
+                <label class="block text-xs text-slate-600 mb-1">¿Cuántos POS tiene el PDV sin contar el POS 90?</label>
+                <input type="number" id="cantidadPos" value="3" min="1" class="w-full p-2 border border-slate-300 rounded mb-3">
+                
+                <label class="block text-xs text-slate-600 font-bold mb-2">Nodos Especiales:</label>
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center text-sm cursor-pointer">
+                        <input type="checkbox" id="tiene81" class="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded"> POS 81
+                    </label>
+                    <label class="flex items-center text-sm cursor-pointer">
+                        <input type="checkbox" id="tiene89" class="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded"> POS 89
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex gap-4">
+            <button onclick="agregarPDV()" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition-all shadow-md active:transform active:scale-95">
+                + Agregar PDV a la lista
+            </button>
+            <button onclick="descargarConsolidado()" id="btnDescargar" class="flex-1 bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition-all shadow-md active:transform active:scale-95 opacity-50 cursor-not-allowed" disabled>
+                Descargar Archivo (0 PDVs)
+            </button>
+        </div>
+
+        <div id="listaAgregados" class="mt-6 text-sm text-slate-600 bg-slate-100 p-3 rounded hidden border border-slate-300">
+            <strong>PDVs en cola:</strong>
+            <ul id="ulPdvs" class="list-disc pl-5 mt-2"></ul>
+        </div>
+    </div>
+
+    <script>
+        let sqlConsolidado = "";
+        let contadorPdvs = 0;
+
+        function toggleOCI() {
+            const isOCI = document.getElementById('tipoServidor').value === 'oci';
+            document.getElementById('divIpOCI').classList.toggle('hidden', !isOCI);
+        }
+
+        function calcularUltimoOcteto(nodo, tipo) {
+            nodo = parseInt(nodo);
+            if (nodo === 99) return (tipo === 'fisico') ? 131 : null; 
+            if (nodo === 90) return (tipo === 'fisico') ? 170 : 132;
+            if (nodo === 81) return 181;
+            if (nodo === 89) return 169;
+            if (nodo >= 1 && nodo <= 9) return 140 + nodo;
+            if (nodo >= 10) return 140 + nodo; 
+            return 0;
+        }
+
+        function agregarPDV() {
+            const cadena = document.getElementById('cadena').value;
+            const id = document.getElementById('pdvId').value;
+            const nombreRaw = document.getElementById('nombreFarma').value;
+            const dir = document.getElementById('direccion').value;
+            const ipInput = document.getElementById('ipBase').value.trim();
+            const tipo = document.getElementById('tipoServidor').value;
+            const numPos = parseInt(document.getElementById('cantidadPos').value);
+            const ipOci99 = document.getElementById('ipNodo99').value;
+            
+            const tiene81 = document.getElementById('tiene81').checked;
+            const tiene89 = document.getElementById('tiene89').checked;
+
+            if(!id || !nombreRaw || !ipInput) return alert("Por favor llena los campos principales (ID, Nombre, IP)");
+            if(tipo === 'oci' && !ipOci99) return alert("Ingresa la IP del Nodo 99 para OCI");
+
+            // Lógica para extraer solo la base de la IP, sin importar si el usuario pega 3 o 4 octetos
+            let partesIp = ipInput.split('.');
+            if (partesIp.length === 4) {
+                partesIp.pop(); // Quita el último número si es una IP completa
+            }
+            const base = partesIp.join('.');
+
+            const localCode = (cadena === 'fybeca') ? 60 : 70;
+            const propCode = (cadena === 'fybeca') ? '901' : '908';
+            const node99Code = (cadena === 'fybeca') ? '9210' : '9211';
+            
+            const nombreConcatenado = `${id} - ${nombreRaw}`;
+            const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19) + '.000000';
+            
+            // Calcular IP del Nodo 99
+            const ipFinalNodo99 = (tipo === 'oci') ? ipOci99 : `${base}.131`;
+
+            let txt = `-- ==========================================\n`;
+            txt += `-- REGISTRO PDV: ${id} (${cadena.toUpperCase()})\n`;
+            txt += `-- ==========================================\n\n`;
+            
+            // 1. LOCALS
+            txt += `INSERT INTO GEOPOS.LOCALS VALUES('${id}','1790710319001',${localCode}, '${nombreConcatenado}', '${nombreConcatenado}', '${dir}', '6944000', 'Quito', 0, 2, 1, NULL, 'PRO', NULL, NULL, 'FARCOMED', NULL);\n`;
+            
+            // 2. PROMOTION (Corregido para mantener el 0 y colocar la IP al final)
+            txt += `INSERT INTO GEOPROMOTION.ENGINENODES VALUES('${id}', 0, '${nombreRaw} - ${ipFinalNodo99}');\n`;
+            
+            // 3. USERLOCAL
+            txt += `INSERT INTO USERLOCAL VALUES ('1', '${id}');\n`;
+            
+            // 4. PROPERTIES
+            txt += `INSERT INTO NODEPROPERTIES SELECT '99', '${id}', NAME, VALUE FROM NODEPROPERTIES WHERE LOCALID = '${propCode}';\n\n`;
+
+            // 5. NODOS
+            const nodosParaProcesar = [99, 90];
+            for(let i=1; i<=numPos; i++) nodosParaProcesar.push(i);
+            if (tiene81) nodosParaProcesar.push(81);
+            if (tiene89) nodosParaProcesar.push(89);
+
+            nodosParaProcesar.forEach(n => {
+                const octeto = calcularUltimoOcteto(n, tipo);
+                const ipFinal = (n === 99) ? ipFinalNodo99 : `${base}.${octeto}`;
+                
+                const tipoNodo = (n === 99) ? 'localnode' : 'posnode';
+                const padre = (n === 99) ? '1' : '99';
+                const tag = (n === 99) ? nombreConcatenado : `POS${n}`;
+                const puerto = (n === 99) ? 8001 : 1030;
+                const flags = (n === 99) ? `1,0,NULL, NULL, NULL, NULL, NULL` : `1,0,1, 0, 0, '1',NULL`;
+                
+                const col5 = (n === 99) ? node99Code : id;
+
+                txt += `INSERT INTO GEOPOS.NODES VALUES ('${n}','${id}','${tipoNodo}','${padre}','${col5}','${tag}','${dir}','1','1','Farmacias',NULL,'1790710319001','${ipFinal}',${puerto},${flags}, 'FARCOMED', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, TIMESTAMP '${timestamp}', NULL);\n`;
+            });
+
+            txt += `\n\n`;
+
+            sqlConsolidado += txt;
+            contadorPdvs++;
+
+            // Interfaz
+            document.getElementById('pdvId').value = "";
+            document.getElementById('nombreFarma').value = "";
+            document.getElementById('direccion').value = "";
+            document.getElementById('pdvId').focus(); 
+
+            const btnDescargar = document.getElementById('btnDescargar');
+            btnDescargar.disabled = false;
+            btnDescargar.classList.remove('opacity-50', 'cursor-not-allowed');
+            btnDescargar.innerText = `Descargar Archivo (${contadorPdvs} PDVs)`;
+
+            const divLista = document.getElementById('listaAgregados');
+            const ulPdvs = document.getElementById('ulPdvs');
+            divLista.classList.remove('hidden');
+            
+            const li = document.createElement('li');
+            li.innerText = `PDV ${id} - ${nombreRaw} agregado a la cola.`;
+            ulPdvs.appendChild(li);
+        }
+
+        function descargarConsolidado() {
+            if (contadorPdvs === 0) return;
+
+            const blob = new Blob([sqlConsolidado], { type: 'text/plain' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            
+            const nombreArchivo = contadorPdvs === 1 ? `INSERTS_PDV.txt` : `INSERTS_MASIVOS_${contadorPdvs}_PDVs.txt`;
+            link.download = nombreArchivo;
+            link.click();
+            
+            if(confirm("Descarga iniciada. ¿Deseas limpiar la lista para empezar un nuevo lote?")) {
+                window.location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
